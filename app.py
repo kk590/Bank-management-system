@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from motor.motor_asyncio import AsyncIOMotorClient
 
-MONGODB_URL = os.getenv("MONGODB_URL")
+MONGODB_URL = mongodb+srv://bankadmin:<db_password>@cluster0.sg6au3d.mongodb.net/?appName=Cluster0
 client = None
 db = None
 
