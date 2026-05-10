@@ -1,14 +1,24 @@
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from motor.motor_asyncio import AsyncIOMotorClient
+
+MONGODB_URL = os.getenv("MONGODB_URL")
+client = None
+db = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # connect to MongoDB here
+    global client, db
+    if not MONGODB_URL:
+        raise RuntimeError("MONGODB_URL is missing")
+    client = AsyncIOMotorClient(MONGODB_URL)
+    db = client["bankdb"]
     yield
-    # close client here
+    client.close()
 
 app = FastAPI(lifespan=lifespan)
 
 @app.get("/")
-def root():
+async def root():
     return {"status": "ok"}
