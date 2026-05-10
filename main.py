@@ -1,18 +1,15 @@
 import os
 
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from dotenv import load_dotenv
 
-from database import ensure_indexes, ping_db
-from routers import account_router, admin_router, auth_router, transaction_router, user_router
+app = FastAPI()
+templates = Jinja2Templates(directory="templates")
 
-load_dotenv()
-
-app = FastAPI(title="Aureum Private Bank API")
-
+@app.get("/", response_class=HTMLResponse)
+async def home(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
