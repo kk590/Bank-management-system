@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - NexusBank</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav>
+        <div class="container nav-content">
+            <div class="logo">NexusBank</div>
+            <div class="nav-links">
+                <span id="welcomeText" class="text-muted" style="margin-right: 1.5rem;"></span>
+                <button onclick="logout()" class="btn-logout">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Section if user has no accounts -->
+        <div id="noAccountSection" class="hidden" style="margin-top: 2rem;">
+            <div class="card" style="max-width: 500px; margin: 0 auto;">
+                <h2 class="mb-1">Create an Account</h2>
+                <p class="text-muted mb-3">You don't have any accounts yet. Open one to start banking.</p>
+                <form id="createAccountForm">
+                    <div class="form-group">
+                        <label>Account Type</label>
+                        <select id="accType" class="form-control dark-select" required>
+                            <option value="savings">Savings</option>
+                            <option value="checking">Checking</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Initial Deposit ($)</label>
+                        <input type="number" id="accDeposit" class="form-control" min="0" step="0.01" value="0" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Open Account</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Dashboard UI -->
+        <div id="dashboardSection" class="hidden">
+            <div class="dashboard-grid">
+                <!-- Left Column -->
+                <div>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <h3 class="text-muted" style="font-size: 1rem;">Total Balance</h3>
+                            <div class="stat-value" id="totalBalance">$0.00</div>
+                            <p class="text-muted" style="font-size: 0.8rem; margin-top: 0.5rem;" id="accountNumText">Account: ---</p>
+                        </div>
+                    </div>
+
+                    <div class="card mb-3">
+                        <h2 class="mb-2">Recent Transactions</h2>
+                        <div class="table-responsive">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Type</th>
+                                        <th>Amount</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="txHistory">
+                                    <!-- Rendered dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column -->
+                <div>
+                    <div class="card">
+                        <h2 class="mb-2">Make a Transaction</h2>
+                        <form id="txForm">
+                            <div class="form-group">
+                                <label>Action</label>
+                                <select id="txType" class="form-control dark-select" required>
+                                    <option value="deposit">Deposit</option>
+                                    <option value="withdraw">Withdraw</option>
+                                    <option value="transfer">Transfer</option>
+                                </select>
+                            </div>
+                            <div class="form-group hidden" id="targetAccGroup">
+                                <label>Target Account Number</label>
+                                <input type="text" id="targetAccount" class="form-control">
+                            </div>
+                            <div class="form-group">
+                                <label>Amount ($)</label>
+                                <input type="number" id="txAmount" class="form-control" min="0.01" step="0.01" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Description</label>
+                                <input type="text" id="txDesc" class="form-control" placeholder="Optional">
+                            </div>
+                            <button type="submit" class="btn btn-accent">Submit</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+        let currentUser = null;
+        let currentAccount = null;
+
+        async function init() {
+            if (!getToken()) {
+                window.location.href = '/';
+                return;
+            }
+
+            try {
+                currentUser = await fetchAPI('/users/me');
+                if (currentUser.role === 'admin') {
+                    window.location.href = '/admin';
+                    return;
+                }
+                document.getElementById('welcomeText').textContent = `Welcome, ${currentUser.username}`;
+                await loadAccountData();
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function loadAccountData() {
+            try {
+                const accounts = await fetchAPI('/accounts/');
+                if (accounts.length === 0) {
+                    document.getElementById('noAccountSection').classList.remove('hidden');
+                    document.getElementById('dashboardSection').classList.add('hidden');
+                } else {
+                    document.getElementById('noAccountSection').classList.add('hidden');
+                    document.getElementById('dashboardSection').classList.remove('hidden');
+                    
+                    // Simple logic: default to the first account
+                    currentAccount = accounts[0];
+                    document.getElementById('totalBalance').textContent = formatCurrency(currentAccount.balance);
+                    document.getElementById('accountNumText').textContent = `Account: ${currentAccount.account_number} (${currentAccount.account_type})`;
+                    
+                    await loadTransactions();
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function loadTransactions() {
+            try {
+                const txs = await fetchAPI(`/transactions/history/${currentAccount.id}`);
+                const tbody = document.getElementById('txHistory');
+                tbody.innerHTML = '';
+                
+                if(txs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No transactions found</td></tr>';
+                    return;
+                }
+
+                txs.forEach(tx => {
+                    const tr = document.createElement('tr');
+                    const badgeClass = tx.type === 'deposit' ? 'badge-deposit' : (tx.type === 'withdrawal' ? 'badge-withdrawal' : 'badge-transfer');
+                    
+                    let displayAmount = formatCurrency(tx.amount);
+                    if (tx.type === 'withdrawal' || (tx.type === 'transfer' && tx.related_account_id && !tx.description.startsWith('Transfer from'))) {
+                        displayAmount = `-${displayAmount}`;
+                        tr.style.color = 'var(--danger)';
+                    } else if (tx.type === 'deposit' || tx.description.startsWith('Transfer from')) {
+                        displayAmount = `+${displayAmount}`;
+                        tr.style.color = 'var(--accent)';
+                    }
+
+                    tr.innerHTML = `
+                        <td>${formatDate(tx.timestamp)}</td>
+                        <td><span class="badge ${badgeClass}">${tx.type}</span></td>
+                        <td>${displayAmount}</td>
+                        <td>${tx.description}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (err) {}
+        }
+
+        document.getElementById('createAccountForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const account_type = document.getElementById('accType').value;
+            const initial_deposit = parseFloat(document.getElementById('accDeposit').value);
+
+            try {
+                await fetchAPI('/accounts/', {
+                    method: 'POST',
+                    body: JSON.stringify({ account_type, initial_deposit })
+                });
+                showNotification('Account created successfully!');
+                loadAccountData();
+            } catch (err) {}
+        });
+
+        document.getElementById('txType').addEventListener('change', (e) => {
+            const type = e.target.value;
+            const targetGroup = document.getElementById('targetAccGroup');
+            if (type === 'transfer') {
+                targetGroup.classList.remove('hidden');
+                document.getElementById('targetAccount').required = true;
+            } else {
+                targetGroup.classList.add('hidden');
+                document.getElementById('targetAccount').required = false;
+            }
+        });
+
+        document.getElementById('txForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const type = document.getElementById('txType').value;
+            const amount = parseFloat(document.getElementById('txAmount').value);
+            let desc = document.getElementById('txDesc').value;
+            if (!desc) desc = type.charAt(0).toUpperCase() + type.slice(1);
+
+            try {
+                if (type === 'deposit') {
+                    await fetchAPI(`/transactions/deposit/${currentAccount.id}?amount=${amount}&description=${encodeURIComponent(desc)}`, { method: 'POST' });
+                } else if (type === 'withdraw') {
+                    await fetchAPI(`/transactions/withdraw/${currentAccount.id}?amount=${amount}&description=${encodeURIComponent(desc)}`, { method: 'POST' });
+                } else if (type === 'transfer') {
+                    const target = document.getElementById('targetAccount').value;
+                    await fetchAPI(`/transactions/transfer/${currentAccount.id}?target_account_number=${target}&amount=${amount}&description=${encodeURIComponent(desc)}`, { method: 'POST' });
+                }
+                
+                showNotification('Transaction successful!');
+                document.getElementById('txForm').reset();
+                document.getElementById('txType').value = 'deposit';
+                document.getElementById('txType').dispatchEvent(new Event('change'));
+                loadAccountData();
+            } catch (err) {}
+        });
+
+        init();
+    </script>
+</body>
+</html>

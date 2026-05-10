@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bank Management System - Welcome</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav>
+        <div class="container nav-content">
+            <div class="logo">NexusBank</div>
+        </div>
+    </nav>
+
+    <div class="container auth-wrapper">
+        <!-- Login Form -->
+        <div class="card auth-card" id="loginCard">
+            <h2 class="mb-1 text-center">Welcome Back</h2>
+            <p class="text-muted mb-3 text-center">Enter your credentials to access your account</p>
+            
+            <form id="loginForm">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="loginUsername" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="loginPassword" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Sign In</button>
+            </form>
+            <p class="text-center mt-2 text-muted">
+                New to NexusBank? <a href="#" id="showRegister" class="text-primary">Create an account</a>
+            </p>
+        </div>
+
+        <!-- Register Form -->
+        <div class="card auth-card hidden" id="registerCard">
+            <h2 class="mb-1 text-center">Create Account</h2>
+            <p class="text-muted mb-3 text-center">Join NexusBank today</p>
+            
+            <form id="registerForm">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="regUsername" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="regEmail" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="regPassword" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-accent">Sign Up</button>
+            </form>
+            <p class="text-center mt-2 text-muted">
+                Already have an account? <a href="#" id="showLogin" class="text-primary">Sign in</a>
+            </p>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+        const loginCard = document.getElementById('loginCard');
+        const registerCard = document.getElementById('registerCard');
+
+        document.getElementById('showRegister').addEventListener('click', (e) => {
+            e.preventDefault();
+            loginCard.classList.add('hidden');
+            registerCard.classList.remove('hidden');
+        });
+
+        document.getElementById('showLogin').addEventListener('click', (e) => {
+            e.preventDefault();
+            registerCard.classList.add('hidden');
+            loginCard.classList.remove('hidden');
+        });
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            const params = new URLSearchParams();
+            params.append('username', username);
+            params.append('password', password);
+
+            try {
+                const data = await fetchAPI('/auth/login', {
+                    method: 'POST',
+                    body: params,
+                    noAuth: true
+                });
+                
+                setToken(data.access_token);
+                showNotification('Login successful!');
+                
+                // Fetch user info to route properly
+                const user = await fetchAPI('/users/me');
+                if (user.role === 'admin') {
+                    window.location.href = '/admin';
+                } else {
+                    window.location.href = '/dashboard';
+                }
+            } catch (err) {}
+        });
+
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('regUsername').value;
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+
+            try {
+                await fetchAPI('/auth/register', {
+                    method: 'POST',
+                    body: JSON.stringify({ username, email, password }),
+                    noAuth: true
+                });
+                showNotification('Registration successful! Please sign in.');
+                document.getElementById('showLogin').click();
+            } catch (err) {}
+        });
+    </script>
+</body>
+</html>
