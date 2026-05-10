@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from motor.motor_asyncio import AsyncIOMotorClient
 
-MONGODB_URL = mongodb+srv://bankadmin:<db_password>@cluster0.sg6au3d.mongodb.net/?appName=Cluster0
+MONGODB_URL = os.getenv("MONGODB_URL")
 client = None
 db = None
 
@@ -16,9 +16,13 @@ async def lifespan(app: FastAPI):
     db = client["bankdb"]
     yield
     client.close()
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(lifespan=lifespan)
 
-@app.get("/")
-async def root():
+# Change this path to your real build folder
+app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="frontend")
+
+@app.get("/api/health")
+async def health():
     return {"status": "ok"}
